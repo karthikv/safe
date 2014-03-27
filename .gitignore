@@ -1,0 +1,7 @@
+.DS_Store
+.Python
+venv/
+*.sw[pon]
+*.pyc
+*.egg-info/
+env.sh
