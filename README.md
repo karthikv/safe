@@ -49,7 +49,7 @@ keychain.
 name to the target recipient. You must have their public GPG key in your
 keychain.
 
-`safe fetch [config_file]`: Fetches files from the safe accoring to the
+`safe fetch [config_file]`: Fetches files from the safe according to the
 specified configuration file. The configuration file should be in YAML with
 the following format:
 
