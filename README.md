@@ -13,22 +13,11 @@ Do this **outside** of any virtual environment and you'll have the `safe`
 command line tool installed on your system.
 
 ## Configure your environment
-You'll need to define two variables in your shell environment to run `safe`:
-
-- `AWS_ACCESS_KEY`: your AWS access key for S3
-- `AWS_SECRET_ACCESS_KEY`: your AWS secret key for S3
-
-To simplify this, I've created an `env.sh` file with the following contents:
-
-```sh
-export AWS_ACCESS_KEY=[your_aws_access_key]
-export AWS_SECRET_ACCESS_KEY=[your_aws_secret_key]
-```
-
-I simply run `source env.sh` before running safe commands.
-
-Alternatively, you could put those lines in your `~/.bash_profile` to make them
-permanent.
+When you run `safe` for the first time, it'll ask for you three configuration
+options: the email associated with your GPG key, your AWS access key for S3,
+and your AWS secret key for S3. These are saved in the `~/.saferc`
+configuration file (encrypted with GPG, of course). If you ever need to change
+these options or reconfigure, simply delete `~/.saferc` and run `safe` again.
 
 ## Commands
 `safe ls`: Lists all documents in the safe.
