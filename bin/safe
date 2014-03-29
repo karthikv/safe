@@ -38,14 +38,16 @@ def main():
   release_parser = safe_subparsers.add_parser('release',
     help='Release document to another user.')
   release_parser.add_argument('document_name', help='Document name to release.')
-  release_parser.add_argument('recipient_email', help='Recipient email to release to.')
+  release_parser.add_argument('recipient_email',
+    help='Recipient email to release to.', nargs='+')
   release_parser.set_defaults(func=handle_release)
 
   # add revoke subcommand, which allows one user to revoke a document from another user
   revoke_parser = safe_subparsers.add_parser('revoke',
     help='Revoke document from another user.')
   revoke_parser.add_argument('document_name', help='Document name to revoke.')
-  revoke_parser.add_argument('recipient_email', help='Recipient email to revoke from.')
+  revoke_parser.add_argument('recipient_email',
+    help='Recipient email to revoke from.', nargs='+')
   revoke_parser.set_defaults(func=handle_revoke)
 
   # add fetch subcommand, which allows a user to fetch files according to a configuration
@@ -127,24 +129,26 @@ def handle_rm(safe, args):
 
 def handle_release(safe, args):
   """ Allows the user to release a document to a recipient. """
-  success = safe.release(args.document_name, args.recipient_email)
-  if success:
-    print ('Successfully released document %s to %s.' %
-      (args.document_name, args.recipient_email))
-  else:
-    print ('Failed to release document %s; are you sure you can read it?' %
-      args.document_name)
+  for recipient_email in args.recipient_email:
+    success = safe.release(args.document_name, recipient_email)
+    if success:
+      print ('Successfully released document %s to %s.' %
+        (args.document_name, recipient_email))
+    else:
+      print ('Failed to release document %s; are you sure you can read it?' %
+        args.document_name)
 
 
 def handle_revoke(safe, args):
   """ Allows the user to revoke a document from a recipient. """
-  success = safe.revoke(args.document_name, args.recipient_email)
-  if success:
-    print ('Successfully revoked document %s from %s.' %
-      (args.document_name, args.recipient_email))
-  else:
-    print ('Failed to revoke document %s; are you sure it exists?' %
-      args.document_name)
+  for recipient_email in args.recipient_email:
+    success = safe.revoke(args.document_name, args.recipient_email)
+    if success:
+      print ('Successfully revoked document %s from %s.' %
+        (args.document_name, recipient_email))
+    else:
+      print ('Failed to revoke document %s; are you sure it exists?' %
+        args.document_name)
 
 
 def handle_fetch(safe, args):
