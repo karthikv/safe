@@ -6,11 +6,13 @@ security.
 To install, clone this repository and run:
 
 ```sh
-$ python setup.py install
+$ python setup.py develop
 ```
 
 Do this **outside** of any virtual environment and you'll have the `safe`
-command line tool installed on your system.
+command line tool installed on your system. Unlike `python setup.py install`,
+`python setup.py develop` symlinks files so that when they are modified, the
+`safe` command-line tool automatically updates.
 
 ## Configure your environment
 When you run `safe` for the first time, it'll ask for you three configuration
