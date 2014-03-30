@@ -15,7 +15,7 @@ command line tool installed on your system.
 ## Configure your environment
 When you run `safe` for the first time, it'll ask for you three configuration
 options: the email associated with your GPG key, your AWS access key for S3,
-and your AWS secret key for S3. These are saved in the `~/.saferc`
+and your AWS secret key for S3. These are then saved in the `~/.saferc`
 configuration file (encrypted with GPG, of course). If you ever need to change
 these options or reconfigure, simply delete `~/.saferc` and run `safe` again.
 
@@ -30,13 +30,13 @@ character (ctrl + D).
 
 `safe rm [document_name]`: Removes a document with the given name.
 
-`safe release [document_name] [recipient]`: Release the document with the given
-name to the target recipient. You must have their public GPG key in your
-keychain.
+`safe release [document_name] [recipient1] [recipient2]`: Release the document
+with the given name to the target recipients. You must have their public GPG
+keys in your keychain. At least one recipient is required.
 
-`safe revoke [document_name] [recipient]`: Revokes the document with the given
-name to the target recipient. You must have their public GPG key in your
-keychain.
+`safe revoke [document_name] [recipient1] [recipient2] ...`: Revokes the
+document with the given name from the target recipients. At least one recipient
+is required.
 
 `safe fetch [config_file]`: Fetches files from the safe according to the
 specified configuration file. The configuration file should be in YAML with
