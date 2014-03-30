@@ -1,45 +1,69 @@
 import os
 import gnupg
 import boto
+import json
 from boto.s3 import connection as s3
 
 
 class Safe(object):
-  AWS_ACCESS_ENV_KEY = 'AWS_ACCESS_KEY'
-  AWS_SECRET_ACCESS_ENV_KEY = 'AWS_SECRET_ACCESS_KEY'
+  SAFE_CONFIG_FILE = os.path.expanduser('~/.saferc')
+  GPG_EMAIL_CONFIG_KEY = 'gpg_email'
 
-  SAFE_GPG_EMAIL_FILE = os.path.expanduser('~/.saferc')
+  AWS_ACCESS_CONFIG_KEY = 'aws_access_key'
+  AWS_SECRET_ACCESS_CONFIG_KEY = 'aws_secret_access_key'
   SCORYST_SAFE_BUCKET = 'scoryst-safe'
 
   def __init__(self):
     """ Creates a Safe that contains locked documents. """
     # set up GPG and S3 interfaces
     self.gpg = gnupg.GPG(use_agent=True)
-    self._get_gpg_email()
+    self._fetch_config_options()
     self._establish_s3_connection()
 
 
-  def _get_gpg_email(self):
-    """ Retrieves the GPG email for the current user. """
-    if os.path.isfile(self.SAFE_GPG_EMAIL_FILE):
-      with open(self.SAFE_GPG_EMAIL_FILE, 'r') as handle:
-        self.gpg_email = handle.read().strip()
+  def _fetch_config_options(self):
+    """
+    Fetches the GPG email, AWS access key, and AWS secret key from the safe
+    config file. If no config file exists, queries the user for input. Stores
+    the user input in a new config file.
+    """
+    if os.path.isfile(self.SAFE_CONFIG_FILE):
+      # config file exists; read in options
+      handle = open(self.SAFE_CONFIG_FILE, 'r')
+      config_contents = handle.read()
+      handle.close()
+
+      try:
+        config = json.loads(str(self.gpg.decrypt(config_contents)))
+      except ValueError:
+        raise Exception('Config file is invalid. If safe got updated recently,' +
+          ' please delete your config file at ~/.saferc. Otherwise, ensure that' +
+          ' GPG agent is running.')
+      else:
+        self.gpg_email = config[self.GPG_EMAIL_CONFIG_KEY]
+        self.aws_access_key = config[self.AWS_ACCESS_CONFIG_KEY]
+        self.aws_secret_access_key = config[self.AWS_SECRET_ACCESS_CONFIG_KEY]
     else:
+      # no config file; ask for user input and remember it
       self.gpg_email = raw_input('Enter your GPG key email: ')
-      with open(self.SAFE_GPG_EMAIL_FILE, 'w') as handle:
-        handle.write(self.gpg_email + '\n')
+      self.aws_access_key = raw_input('Enter your AWS access key: ')
+      self.aws_secret_access_key = raw_input('Enter your AWS secret key: ')
+
+      config = {
+        self.GPG_EMAIL_CONFIG_KEY: self.gpg_email,
+        self.AWS_ACCESS_CONFIG_KEY: self.aws_access_key,
+        self.AWS_SECRET_ACCESS_CONFIG_KEY: self.aws_secret_access_key,
+      }
+
+      # we're storing sensitive AWS keys, so encrypt them first
+      config_contents = self.gpg.encrypt(json.dumps(config), self.gpg_email)
+      with open(self.SAFE_CONFIG_FILE, 'w') as handle:
+        handle.write(str(config_contents))
 
 
   def _establish_s3_connection(self):
     """ Establishes a connection with S3 using environment variables. """
-    # ensure AWS keys are defined in environment variables
-    if (not self.AWS_ACCESS_ENV_KEY in os.environ or
-        not self.AWS_SECRET_ACCESS_ENV_KEY in os.environ):
-      raise KeyError('%s and %s must be defined environment variables.' %
-          (self.AWS_ACCESS_ENV_KEY, self.AWS_SECRET_ACCESS_ENV_KEY))
-
-    connection = s3.S3Connection(os.environ[self.AWS_ACCESS_ENV_KEY],
-      os.environ[self.AWS_SECRET_ACCESS_ENV_KEY])
+    connection = s3.S3Connection(self.aws_access_key, self.aws_secret_access_key)
     self.bucket = connection.get_bucket(self.SCORYST_SAFE_BUCKET)
 
 
