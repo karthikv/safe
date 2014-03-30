@@ -22,7 +22,11 @@ class Safe(object):
 
 
   def _fetch_config_options(self):
-    """ Retrieves the GPG email for the current user. """
+    """
+    Fetches the GPG email, AWS access key, and AWS secret key from the safe
+    config file. If no config file exists, queries the user for input. Stores
+    the user input in a new config file.
+    """
     if os.path.isfile(self.SAFE_CONFIG_FILE):
       # config file exists; read in options
       handle = open(self.SAFE_CONFIG_FILE, 'r')
@@ -31,10 +35,10 @@ class Safe(object):
 
       try:
         config = json.loads(str(self.gpg.decrypt(config_contents)))
-      except :
-        # bad config file; redo configuration as if file didn't exist
-        os.remove(self.SAFE_CONFIG_FILE)
-        return self._fetch_config_options()
+      except ValueError:
+        raise Exception('Config file is invalid. If safe got updated recently,' +
+          ' please delete your config file at ~/.saferc. Otherwise, ensure that' +
+          ' GPG agent is running.')
       else:
         self.gpg_email = config[self.GPG_EMAIL_CONFIG_KEY]
         self.aws_access_key = config[self.AWS_ACCESS_CONFIG_KEY]
