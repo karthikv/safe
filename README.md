@@ -22,6 +22,16 @@ configuration file (encrypted with GPG, of course). If you ever need to change
 these options or reconfigure, simply delete `~/.saferc` and run `safe` again.
 
 ## Commands
+`safe create [safe_name]`: Creates a new safe with the given safe name.
+
+`safe delete [safe_name]`: Deletes config information for a given safe.
+
+`safe show`: Lists all the safes you are managing.
+
+`safe set [safe_name]`: Sets the safe you are currently in.
+
+`safe current`: Displays the current safe you are in.
+
 `safe ls`: Lists all documents in the safe.
 
 `safe store [document_name]`: Store a document with the given name in the safe.

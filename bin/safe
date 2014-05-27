@@ -8,12 +8,35 @@ from safe import Safe
 
 
 def main():
-  """ Allows user to interface with Scoryst safe. """
+  """ Allows user to interface with safe. """
   # set up django environment
   safe = Safe()
 
   safe_parser = argparse.ArgumentParser(prog='safe', description='Access Scoryst safe.')
   safe_subparsers = safe_parser.add_subparsers()
+
+  # add create subcommand, which allows a user to create a new safe
+  create_parser = safe_subparsers.add_parser('create', help='Create a safe.')
+  create_parser.add_argument('safe_name', help='Unique name for the safe')
+  create_parser.set_defaults(func=handle_create)
+
+  # add show subcommand, which lists all the safes the user has
+  show_parser = safe_subparser.add_parser('show', help='List all available safes.')
+  show_parser.set_defaults(func=handle_show)
+
+  # add delete subcommand, which removes a given safe
+  delete_parser = safe_subparser.add_parser('delete', help='Remove a safe.')
+  delete_parser = safe_subparser.add_argument('safe_name', help='Name of the safe being deleted.')
+  delete_parser.set_defaults(func=handle_delete)
+
+  # add set subcommand, which allows user to the set the current safe they are in
+  set_parser = safe_subparsers.add_parser('set', help='Set current safe.')
+  set_parser.add_arguments('safe_name', help='Unique name for the safe')
+  set_parser.set_defaults(func=handle_set)
+
+  # add current subcommand, which allows the user to see which safe they are in
+  current_parser = safe_subparsers.add_parser('current', help='Shows current safe.')
+  current_parser.set_defaults(func=handle_current)
 
   # add store subcommand, which allows a user to store a document
   store_parser = safe_subparsers.add_parser('store', help='Store a document into the safe.')
@@ -58,6 +81,37 @@ def main():
 
   args = safe_parser.parse_args()
   args.func(safe, args)
+
+
+def handle_create(safe, args):
+  """ Allows the user to create a safe. """
+  safe.create(args.safe_name)
+
+
+def handle_show(safe, args):
+  """ Allows the user to view all available safes. """
+  safes = safe.show()
+  if len(safes) > 0:
+    print '\n'.join(safes)
+
+
+def handle_delete(safe, args):
+  """ Allows the user to delete a safe. """
+  safe.delete(args.safe_name)
+
+
+def handle_set(safe, args):
+  """ Allows the user to set the safe they are in. """
+  safe.set(args.safe_name)
+
+
+def handle_current(safe, args):
+  """ Allows user to view the name of the safe they are in. """
+  safe_name = safe.current()
+  if safe_name:
+    print safe_name
+  else:
+    print 'You are not in a safe. Use [safe set] to set the current safe.'
 
 
 def handle_store(safe, args):

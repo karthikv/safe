@@ -9,9 +9,12 @@ class Safe(object):
   SAFE_CONFIG_FILE = os.path.expanduser('~/.saferc')
   GPG_EMAIL_CONFIG_KEY = 'gpg_email'
 
+  AWS_SAFES_CONFIG_KEY = 'aws_safes'
   AWS_ACCESS_CONFIG_KEY = 'aws_access_key'
   AWS_SECRET_ACCESS_CONFIG_KEY = 'aws_secret_access_key'
-  SCORYST_SAFE_BUCKET = 'scoryst-safe'
+  AWS_BUCKET_NAME_CONFIG_KEY = 'aws_bucket_name_key'
+
+  CURRENT_SAFE_CONFIG_KEY = 'current_safe'
 
   def __init__(self):
     """ Creates a Safe that contains locked documents. """
@@ -19,6 +22,20 @@ class Safe(object):
     self.gpg = gnupg.GPG(use_agent=True)
     self._fetch_config_options()
     self._establish_s3_connection()
+
+
+  def _save_config_file(self):
+    """ Encrypts and writes the settings to the config file. """
+    config = {
+      self.GPG_EMAIL_CONFIG_KEY: self.gpg_email,
+      self.AWS_SAFES_CONFIG_KEY: self.safes,
+      self.CURRENT_SAFE_CONFIG_KEY: self.current_safe,
+    }
+
+    # we're storing sensitive AWS keys, so encrypt them first
+    config_contents = self.gpg.encrypt(json.dumps(config), self.gpg_email)
+    with open(self.SAFE_CONFIG_FILE, 'w') as handle:
+      handle.write(str(config_contents))
 
 
   def _fetch_config_options(self):
@@ -41,30 +58,92 @@ class Safe(object):
           ' GPG agent is running.')
       else:
         self.gpg_email = config[self.GPG_EMAIL_CONFIG_KEY]
-        self.aws_access_key = config[self.AWS_ACCESS_CONFIG_KEY]
-        self.aws_secret_access_key = config[self.AWS_SECRET_ACCESS_CONFIG_KEY]
+        self.safes = config[self.AWS_SAFES_CONFIG_KEY]
+        self.current_safe = config[self.CURRENT_SAFE_CONFIG_KEY]
     else:
       # no config file; ask for user input and remember it
       self.gpg_email = raw_input('Enter your GPG key email: ')
-      self.aws_access_key = raw_input('Enter your AWS access key: ')
-      self.aws_secret_access_key = raw_input('Enter your AWS secret key: ')
+      self.safes = {}
+      self.current_safe = ""
 
-      config = {
-        self.GPG_EMAIL_CONFIG_KEY: self.gpg_email,
-        self.AWS_ACCESS_CONFIG_KEY: self.aws_access_key,
-        self.AWS_SECRET_ACCESS_CONFIG_KEY: self.aws_secret_access_key,
-      }
+      self._save_config_file()
 
-      # we're storing sensitive AWS keys, so encrypt them first
-      config_contents = self.gpg.encrypt(json.dumps(config), self.gpg_email)
-      with open(self.SAFE_CONFIG_FILE, 'w') as handle:
-        handle.write(str(config_contents))
+      safe_name = raw_input('Enter your first safe name: ')
+      self.create(safe_name)
 
 
   def _establish_s3_connection(self):
     """ Establishes a connection with S3 using environment variables. """
-    connection = s3.S3Connection(self.aws_access_key, self.aws_secret_access_key)
-    self.bucket = connection.get_bucket(self.SCORYST_SAFE_BUCKET)
+    if len(self.safes) < 1:
+      raise Exception('Please define at least one safe using \'safe create\'') 
+
+    if not self.current_safe:
+      raise Exception('Please set the safe you want to access using \'safe set\'')
+
+    connection = s3.S3Connection(
+        self.safes[self.current_safe][self.AWS_ACCESS_CONFIG_KEY],
+        self.safes[self.current_safe][self.AWS_SECRET_ACCESS_CONFIG_KEY])
+    self.bucket = connection.get_bucket(self.safes[self.current_safe]
+        [self.AWS_BUCKET_NAME_CONFIG_KEY])
+
+
+  def create(self, safe_name):
+    """
+    Allows the user to create a safe with the given name. Queries the user for
+    the AWS access key, secret key and the bucket name. Saves these settings to
+    the config file.
+    """
+    if safe_name in self.safes:
+      raise Exception('The safe name [%s] already exists! Try another name ' +
+          'or delete the existing safe.' % safe_name)
+  
+    aws_access_key = raw_input('Enter your AWS access key: ')
+    aws_secret_access_key = raw_input('Enter your AWS private access key: ')
+    aws_bucket_name = raw_input('Enter the AWS bucket name: ')
+
+    self.safes[safe_name] = {
+      self.AWS_ACCESS_CONFIG_KEY: aws_access_key,
+      self.AWS_SECRET_ACCESS_CONFIG_KEY: aws_secret_access_key,
+      self.AWS_BUCKET_NAME_CONFIG_KEY: aws_bucket_name,
+    }
+
+    self.current_safe = safe_name
+
+    self._save_config_file()
+
+
+  def delete(self, safe_name):
+    """
+    Removes all settings associated with a given safe name. These changes are
+    reflected in the config file.
+    """
+    if safe_name not in self.safes:
+      raise Exception('The safe name [%s] does not exist! Did you type it ' +
+          'correctly?' % safe_name)
+
+    del self.safes[safe_name]
+
+    self._save_config_file()
+  
+
+  def show(self):
+    """ Lists out all the safes that are currently being managed by safe. """
+    return self.safes.keys()
+
+
+  def set(self, safe_name):
+    """ Sets the safe the user is currently working in. """
+    if safe_name not in self.safes:
+      raise Exception('The safe name [%s] does not exit.' % safe_name)
+
+    self.current_safe = safe_name
+
+    self._save_config_file()
+
+
+  def current(self):
+    """ Returns the safe name of the safe the user is currently working in. """
+    return self.current_safe
 
 
   def store(self, document_name, document_text, recipient=None):
