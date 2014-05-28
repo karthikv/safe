@@ -2,6 +2,7 @@ import os
 import gnupg
 import boto
 import json
+import getpass
 from boto.s3 import connection as s3
 
 
@@ -19,7 +20,7 @@ class Safe(object):
   def __init__(self):
     """ Creates a Safe that contains locked documents. """
     # set up GPG and S3 interfaces
-    self.gpg = gnupg.GPG(use_agent=True)
+    self.gpg = gnupg.GPG()
     self._fetch_config_options()
     self._establish_s3_connection()
 
@@ -33,7 +34,8 @@ class Safe(object):
     }
 
     # we're storing sensitive AWS keys, so encrypt them first
-    config_contents = self.gpg.encrypt(json.dumps(config), self.gpg_email)
+    passphrase = getpass.getpass('Enter your GPG passphrase: ')
+    config_contents = self.gpg.encrypt(json.dumps(config), self.gpg_email, passphrase=passphrase)
     with open(self.SAFE_CONFIG_FILE, 'w') as handle:
       handle.write(str(config_contents))
 
@@ -51,7 +53,8 @@ class Safe(object):
       handle.close()
 
       try:
-        config = json.loads(str(self.gpg.decrypt(config_contents)))
+        passphrase = getpass.getpass('Enter your GPG passphrase: ')
+        config = json.loads(str(self.gpg.decrypt(config_contents, passphrase=passphrase)))
       except ValueError:
         raise Exception('Config file is invalid. If safe got updated recently,' +
           ' please delete your config file at ~/.saferc. Otherwise, ensure that' +

@@ -21,17 +21,17 @@ def main():
   create_parser.set_defaults(func=handle_create)
 
   # add show subcommand, which lists all the safes the user has
-  show_parser = safe_subparser.add_parser('show', help='List all available safes.')
+  show_parser = safe_subparsers.add_parser('show', help='List all available safes.')
   show_parser.set_defaults(func=handle_show)
 
   # add delete subcommand, which removes a given safe
-  delete_parser = safe_subparser.add_parser('delete', help='Remove a safe.')
-  delete_parser = safe_subparser.add_argument('safe_name', help='Name of the safe being deleted.')
+  delete_parser = safe_subparsers.add_parser('delete', help='Remove a safe.')
+  delete_parser.add_argument('safe_name', help='Name of the safe being deleted.')
   delete_parser.set_defaults(func=handle_delete)
 
   # add set subcommand, which allows user to the set the current safe they are in
   set_parser = safe_subparsers.add_parser('set', help='Set current safe.')
-  set_parser.add_arguments('safe_name', help='Unique name for the safe')
+  set_parser.add_argument('safe_name', help='Unique name for the safe')
   set_parser.set_defaults(func=handle_set)
 
   # add current subcommand, which allows the user to see which safe they are in
