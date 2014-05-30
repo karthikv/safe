@@ -75,14 +75,12 @@ class Safe(object):
 
 
   def _ask_yes_no(self, question):
-    """
-    Asks the user for a YES or NO response. Returns True or False
-    accordingly.
-    """
-    valid_resp = { 'yes': True,
-              'y': True,
-              'no': False,
-              'n': False,
+    """ Asks the user for a yes/no response. Returns True if yes, False if no. """
+    valid_resp = {
+      'yes': True,
+      'y': True,
+      'no': False,
+      'n': False,
     }
 
     while True:
@@ -150,6 +148,7 @@ class Safe(object):
       decrypted_text = str(self.gpg.decrypt(data, passphrase=self.passphrase))
 
     return decrypted_text
+
 
   def create(self, safe_name):
     """
