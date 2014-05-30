@@ -8,12 +8,16 @@ from boto.s3 import connection as s3
 
 class Safe(object):
   SAFE_CONFIG_FILE = os.path.expanduser('~/.saferc')
+
   GPG_EMAIL_CONFIG_KEY = 'gpg_email'
 
   AWS_SAFES_CONFIG_KEY = 'aws_safes'
   AWS_ACCESS_CONFIG_KEY = 'aws_access_key'
   AWS_SECRET_ACCESS_CONFIG_KEY = 'aws_secret_access_key'
   AWS_BUCKET_NAME_CONFIG_KEY = 'aws_bucket_name_key'
+
+  USE_GPG_AGENT_CONFIG_KEY = 'use_gpg_agent_key'
+  ENCRYPTED_DATA_CONFIG_KEY = 'encrypted_config_key'
 
   CURRENT_SAFE_CONFIG_KEY = 'current_safe'
 
@@ -23,21 +27,6 @@ class Safe(object):
     self.gpg = gnupg.GPG()
     self._fetch_config_options()
     self._establish_s3_connection()
-
-
-  def _save_config_file(self):
-    """ Encrypts and writes the settings to the config file. """
-    config = {
-      self.GPG_EMAIL_CONFIG_KEY: self.gpg_email,
-      self.AWS_SAFES_CONFIG_KEY: self.safes,
-      self.CURRENT_SAFE_CONFIG_KEY: self.current_safe,
-    }
-
-    # we're storing sensitive AWS keys, so encrypt them first
-    passphrase = getpass.getpass('Enter your GPG passphrase: ')
-    config_contents = self.gpg.encrypt(json.dumps(config), self.gpg_email, passphrase=passphrase)
-    with open(self.SAFE_CONFIG_FILE, 'w') as handle:
-      handle.write(str(config_contents))
 
 
   def _fetch_config_options(self):
@@ -53,8 +42,15 @@ class Safe(object):
       handle.close()
 
       try:
-        passphrase = getpass.getpass('Enter your GPG passphrase: ')
-        config = json.loads(str(self.gpg.decrypt(config_contents, passphrase=passphrase)))
+        plaintext_config = json.loads(str(config_contents))
+        self.use_agent = bool(plaintext_config[self.USE_GPG_AGENT_CONFIG_KEY])
+
+        if self.use_agent:
+          self.gpg = gnugp.GPG(use_agent=True)
+
+        config = json.loads(str(self._decrypt(
+          plaintext_config[self.ENCRYPTED_DATA_CONFIG_KEY])))
+
       except ValueError:
         raise Exception('Config file is invalid. If safe got updated recently,' +
           ' please delete your config file at ~/.saferc. Otherwise, ensure that' +
@@ -65,14 +61,56 @@ class Safe(object):
         self.current_safe = config[self.CURRENT_SAFE_CONFIG_KEY]
     else:
       # no config file; ask for user input and remember it
+      print "It seems like this is your first time using safe. Let's set it up, shall we?"
+
       self.gpg_email = raw_input('Enter your GPG key email: ')
+      self.use_agent = self._ask_yes_no('Would you like to use your GPG Agent? (y/n): ')
       self.safes = {}
       self.current_safe = ""
 
       self._save_config_file()
 
-      safe_name = raw_input('Enter your first safe name: ')
+      safe_name = raw_input('Enter a safe name: ')
       self.create(safe_name)
+
+
+  def _ask_yes_no(self, question):
+    """
+    Asks the user for a YES or NO response. Returns True or False
+    accordingly.
+    """
+    valid_resp = { 'yes': True,
+              'y': True,
+              'no': False,
+              'n': False,
+    }
+
+    while True:
+      resp = raw_input(question).lower()
+      if resp in valid_resp:
+        return valid_resp[resp]
+      else:
+        print "Please respond with 'yes' or 'no'."
+
+
+  def _save_config_file(self):
+    """ Encrypts and writes the settings to the config file. """
+    config = {
+      self.GPG_EMAIL_CONFIG_KEY: self.gpg_email,
+      self.AWS_SAFES_CONFIG_KEY: self.safes,
+      self.CURRENT_SAFE_CONFIG_KEY: self.current_safe,
+    }
+
+    encrypted_config = self._encrypt(json.dumps(config), self.gpg_email)
+
+    config_contents = {
+      self.USE_GPG_AGENT_CONFIG_KEY: self.use_agent,
+      self.ENCRYPTED_DATA_CONFIG_KEY: str(encrypted_config),
+    }
+
+    # we're storing sensitive AWS keys, so encrypt them first
+    with open(self.SAFE_CONFIG_FILE, 'w') as handle:
+      handle.write(json.dumps(config_contents))
 
 
   def _establish_s3_connection(self):
@@ -89,6 +127,29 @@ class Safe(object):
     self.bucket = connection.get_bucket(self.safes[self.current_safe]
         [self.AWS_BUCKET_NAME_CONFIG_KEY])
 
+
+  def _encrypt(self, data, recipient):
+    """ Encrypts data with the given GPG key. """
+    if self.use_agent:
+      encrypted_data = self.gpg.encrypt(data, recipient)
+    else:
+      if not hasattr(self, 'passphrase'):
+        self.passphrase = getpass.getpass('Enter your GPG passphrase: ')
+      encrypted_data = self.gpg.encrypt(data, recipient, passphrase=self.passphrase)
+
+    return encrypted_data
+
+
+  def _decrypt(self, data):
+    """ Decrypts data with the given GPG key. """
+    if self.use_agent:
+      decrypted_text = str(self.gpg.decrypt(data))
+    else:
+      if not hasattr(self, 'passphrase'):
+        self.passphrase = getpass.getpass('Enter your GPG passphrase: ')
+      decrypted_text = str(self.gpg.decrypt(data, passphrase=self.passphrase))
+
+    return decrypted_text
 
   def create(self, safe_name):
     """
@@ -158,7 +219,8 @@ class Safe(object):
     # encrypt text
     document_text = document_text.strip()
     recipient = recipient if not recipient == None else self.gpg_email
-    encrypted_text = self.gpg.encrypt(document_text, recipient)
+
+    encrypted_text = self._encrypt(document_text, recipient)
 
     # store in S3
     key = s3.Key(self.bucket)
@@ -177,7 +239,7 @@ class Safe(object):
     except boto.exception.S3ResponseError:
       return None
     else:
-      return str(self.gpg.decrypt(encrypted_text))
+      return self._decrypt(encrypted_text)
 
 
   def list(self):
