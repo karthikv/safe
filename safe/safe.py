@@ -21,6 +21,14 @@ class Safe(object):
 
   CURRENT_SAFE_CONFIG_KEY = 'current_safe'
 
+  VALID_YES_NO_RESP = {
+    'yes': True,
+    'y': True,
+    'no': False,
+    'n': False,
+  }
+
+
   def __init__(self):
     """ Creates a Safe that contains locked documents. """
     # set up GPG and S3 interfaces
@@ -36,57 +44,58 @@ class Safe(object):
     the user input in a new config file.
     """
     if os.path.isfile(self.SAFE_CONFIG_FILE):
-      # config file exists; read in options
-      handle = open(self.SAFE_CONFIG_FILE, 'r')
-      config_contents = handle.read()
-      handle.close()
-
-      try:
-        plaintext_config = json.loads(str(config_contents))
-        self.use_agent = bool(plaintext_config[self.USE_GPG_AGENT_CONFIG_KEY])
-
-        if self.use_agent:
-          self.gpg = gnugp.GPG(use_agent=True)
-
-        config = json.loads(str(self._decrypt(
-          plaintext_config[self.ENCRYPTED_DATA_CONFIG_KEY])))
-
-      except ValueError:
-        raise Exception('Config file is invalid. If safe got updated recently,' +
-          ' please delete your config file at ~/.saferc. Otherwise, ensure that' +
-          ' GPG agent is running.')
-      else:
-        self.gpg_email = config[self.GPG_EMAIL_CONFIG_KEY]
-        self.safes = config[self.AWS_SAFES_CONFIG_KEY]
-        self.current_safe = config[self.CURRENT_SAFE_CONFIG_KEY]
+      self._load_config_from_file()
     else:
-      # no config file; ask for user input and remember it
-      print "It seems like this is your first time using safe. Let's set it up, shall we?"
+      self._create_new_config_file()
 
-      self.gpg_email = raw_input('Enter your GPG key email: ')
-      self.use_agent = self._ask_yes_no('Would you like to use your GPG Agent? (y/n): ')
-      self.safes = {}
-      self.current_safe = ""
 
-      self._save_config_file()
+  def _load_config_from_file(self):
+    """ Read config information from ~/.saferc file. """
+    handle = open(self.SAFE_CONFIG_FILE, 'r')
+    config_contents = handle.read()
+    handle.close()
 
-      safe_name = raw_input('Enter a safe name: ')
-      self.create(safe_name)
+    try:
+      plaintext_config = json.loads(str(config_contents))
+      self.use_agent = bool(plaintext_config[self.USE_GPG_AGENT_CONFIG_KEY])
+
+      if self.use_agent:
+        self.gpg = gnugp.GPG(use_agent=True)
+
+      config = json.loads(str(self._decrypt(
+        plaintext_config[self.ENCRYPTED_DATA_CONFIG_KEY])))
+
+    except ValueError:
+      raise Exception('Config file is invalid. If safe got updated recently,' +
+        ' please delete your config file at ~/.saferc. Otherwise, ensure that' +
+        ' GPG agent is running.')
+    else:
+      self.gpg_email = config[self.GPG_EMAIL_CONFIG_KEY]
+      self.safes = config[self.AWS_SAFES_CONFIG_KEY]
+      self.current_safe = config[self.CURRENT_SAFE_CONFIG_KEY]
+
+
+  def _create_new_config_file(self):
+    """ Creates a new ~/.saferc file by promting user. """
+    print "It seems like this is your first time using safe. Let's set it up, shall we?"
+
+    self.gpg_email = raw_input('Enter your GPG key email: ')
+    self.use_agent = self._ask_yes_no('Would you like to use your GPG Agent? (y/n): ')
+    self.safes = {}
+    self.current_safe = ""
+
+    self._save_config_file()
+
+    safe_name = raw_input('Enter a safe name: ')
+    self.create(safe_name)
 
 
   def _ask_yes_no(self, question):
     """ Asks the user for a yes/no response. Returns True if yes, False if no. """
-    valid_resp = {
-      'yes': True,
-      'y': True,
-      'no': False,
-      'n': False,
-    }
-
     while True:
       resp = raw_input(question).lower()
-      if resp in valid_resp:
-        return valid_resp[resp]
+      if resp in self.VALID_YES_NO_RESP:
+        return self.VALID_YES_NO_RESP[resp]
       else:
         print "Please respond with 'yes' or 'no'."
 
@@ -99,6 +108,7 @@ class Safe(object):
       self.CURRENT_SAFE_CONFIG_KEY: self.current_safe,
     }
 
+    # we're storing sensitive AWS keys, so encrypt them first
     encrypted_config = self._encrypt(json.dumps(config), self.gpg_email)
 
     config_contents = {
@@ -106,7 +116,6 @@ class Safe(object):
       self.ENCRYPTED_DATA_CONFIG_KEY: str(encrypted_config),
     }
 
-    # we're storing sensitive AWS keys, so encrypt them first
     with open(self.SAFE_CONFIG_FILE, 'w') as handle:
       handle.write(json.dumps(config_contents))
 
@@ -114,10 +123,10 @@ class Safe(object):
   def _establish_s3_connection(self):
     """ Establishes a connection with S3 using environment variables. """
     if len(self.safes) < 1:
-      raise Exception('Please define at least one safe using \'safe create\'') 
+      raise Exception("Please define at least one safe using 'safe create'") 
 
     if not self.current_safe:
-      raise Exception('Please set the safe you want to access using \'safe set\'')
+      raise Exception("Please set the safe you want to access using 'safe set'")
 
     connection = s3.S3Connection(
         self.safes[self.current_safe][self.AWS_ACCESS_CONFIG_KEY],
@@ -180,6 +189,10 @@ class Safe(object):
     Removes all settings associated with a given safe name. These changes are
     reflected in the config file.
     """
+    if same_name == self.current_safe:
+      raise Exception('You cannot delete [%s] because that is your current ' +
+          'safe. Switch to another safe using [safe set] and then try again!')
+
     if safe_name not in self.safes:
       raise Exception('The safe name [%s] does not exist! Did you type it ' +
           'correctly?' % safe_name)
