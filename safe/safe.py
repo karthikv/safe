@@ -60,7 +60,7 @@ class Safe(object):
       self.use_agent = bool(plaintext_config[self.USE_GPG_AGENT_CONFIG_KEY])
 
       if self.use_agent:
-        self.gpg = gnugp.GPG(use_agent=True)
+        self.gpg = gnupg.GPG(use_agent=True)
 
       config = json.loads(str(self._decrypt(
         plaintext_config[self.ENCRYPTED_DATA_CONFIG_KEY])))
