@@ -93,6 +93,8 @@ def handle_show(safe, args):
   safes = safe.show()
   if len(safes) > 0:
     print '\n'.join(safes)
+  else:
+    print "No safes created! Use [safe create] to create a new safe."
 
 
 def handle_delete(safe, args):
